@@ -7,4 +7,5 @@ This repository also contains official addresses of TankBattle's contracts.
 This contract holds data for the TankBattle's Token.
 
 Source code: TankToken.sol
-MainNet address: 
+
+MainNet address: [0x0DFF589ed08ca8FEC5d448Cfb2D290fF9C2d11E2](https://bscscan.com/token/0x0DFF589ed08ca8FEC5d448Cfb2D290fF9C2d11E2)
