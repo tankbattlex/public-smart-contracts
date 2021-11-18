@@ -39,6 +39,7 @@ contract AccessControl {
     }
 
     function setGM(address _newGM) external onlyCEO {
+        require(_newGM != address(0));
         gmAddress = gmAddress;
     }
 
