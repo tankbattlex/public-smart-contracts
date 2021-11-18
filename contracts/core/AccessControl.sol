@@ -24,7 +24,7 @@ contract AccessControl {
     }
 
     modifier onlyCLevel() {
-        require(msg.sender == ceoAddress || msg.sender == gmAddress);
+        require(msg.sender == ceoAddress || msg.sender == cfoAddress);
         _;
     }
 
