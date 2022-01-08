@@ -1,27 +1,130 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.5;
 
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Snapshot.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
-contract TankBattleToken is ERC20Snapshot, Pausable, AccessControl {
-    using SafeMath for uint256;
+import "./modules/GasPriceController.sol";
+import "./modules/DexListing.sol";
+import "./modules/TransferFee.sol";
+
+contract ERC20Token is ERC20, GasPriceController, DexListing, TransferFee, Pausable, AccessControl {
 
     bytes32 private constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 private constant BURNER_ROLE = keccak256("BURNER_ROLE");
     bytes32 private constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-    uint256 private initialTokensSupply = 1000000000 * 10**decimals(); //1B
     mapping(address => bool) private blackListedList;
 
-    constructor() ERC20("TankBattle Token", "TBL") {
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        uint listingDuration_,
+        uint initSupply_
+    )
+    ERC20(name_, symbol_)
+    DexListing(listingDuration_)
+    {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setupRole(ADMIN_ROLE, msg.sender);
-        _mint(msg.sender, initialTokensSupply);
+        _setupRole(BURNER_ROLE, msg.sender);
+        _setupRole(PAUSER_ROLE, msg.sender);
+        _mint(msg.sender, initSupply_);
+        _setTransferFee(msg.sender, 0, 0, 0);
     }
 
-    function snapshot() external onlyRole(ADMIN_ROLE) {
-        _snapshot();
+    /*
+       Override
+   */
+
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal override whenNotPaused {
+        require(
+            !blackListedList[from] && !blackListedList[to],
+            "Address is blacklisted"
+        );
+        super._beforeTokenTransfer(from, to, amount);
+    }
+
+    function _transfer(
+        address sender_,
+        address recipient_,
+        uint256 amount_
+    )
+    internal
+    override
+    onlyValidGasPrice
+    {
+        if (!_listingFinished) {
+            uint fee = _updateAndGetListingFee(sender_, recipient_, amount_);
+            require(fee <= amount_, "Token: listing fee too high");
+            uint transferA = amount_ - fee;
+            if (fee > 0) {
+                super._transfer(sender_, _getTransferFeeTo(), fee);
+            }
+            super._transfer(sender_, recipient_, transferA);
+        } else {
+            uint transferFee = _getTransferFee(sender_, recipient_, amount_);
+            require(transferFee <= amount_, "Token: transferFee too high");
+            uint transferA = amount_ - transferFee;
+            if (transferFee > 0) {
+                super._transfer(sender_, _getTransferFeeTo(), transferFee);
+            }
+            if (transferA > 0) {
+                super._transfer(sender_, recipient_, transferA);
+            }
+        }
+    }
+
+    /*
+        Settings
+    */
+
+    function setMaxGasPrice(
+        uint maxGasPrice_
+    )
+    external
+    onlyRole(ADMIN_ROLE)
+    {
+        _setMaxGasPrice(maxGasPrice_);
+    }
+
+    function setTransferFee(
+        address to_,
+        uint buyFee_,
+        uint sellFee_,
+        uint normalFee_
+    )
+    external
+    onlyRole(ADMIN_ROLE)
+    {
+        _setTransferFee(to_, buyFee_, sellFee_, normalFee_);
+    }
+
+    function addBlackList(address _address) external onlyRole(ADMIN_ROLE) {
+        blackListedList[_address] = true;
+    }
+
+    function addBlackLists(address[] calldata _address) external onlyRole(ADMIN_ROLE) {
+        uint256 count = _address.length;
+        for (uint256 i = 0; i < count; i++) {
+            blackListedList[_address[i]] = true;
+        }
+    }
+
+    function removeBlackList(address _address) external onlyRole(ADMIN_ROLE) {
+        blackListedList[_address] = false;
+    }
+
+    function removeBlackLists(address[] calldata _address) external onlyRole(ADMIN_ROLE) {
+        uint256 count = _address.length;
+        for (uint256 i = 0; i < count; i++) {
+            blackListedList[_address[i]] = false;
+        }
     }
 
     /**
@@ -71,44 +174,24 @@ contract TankBattleToken is ERC20Snapshot, Pausable, AccessControl {
      * `amount`.
      */
     function burnFrom(address account, uint256 amount)
-        public
-        virtual
-        onlyRole(BURNER_ROLE)
+    public
+    virtual
+    onlyRole(BURNER_ROLE)
     {
         uint256 currentAllowance = allowance(account, _msgSender());
         require(
             currentAllowance >= amount,
             "ERC20: burn amount exceeds allowance"
         );
-        unchecked {
-            _approve(account, _msgSender(), currentAllowance - amount);
-        }
+    unchecked {
+        _approve(account, _msgSender(), currentAllowance - amount);
+    }
         _burn(account, amount);
     }
 
-    function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint256 amount
-    ) internal override whenNotPaused notBlackListed {
-        super._beforeTokenTransfer(from, to, amount);
-    }
-
-    function isBacklisted(address _address) external view returns (bool) {
-        return blackListedList[_address];
-    }
-
-    function addBlackList(address _address) external onlyRole(ADMIN_ROLE) {
-        blackListedList[_address] = true;
-    }
-
-    function removeBlackList(address _address) external onlyRole(ADMIN_ROLE) {
-        blackListedList[_address] = false;
-    }
-
-    function getBurnedTotal() external view returns (uint256 _amount) {
-        return initialTokensSupply.sub(totalSupply());
-    }
+    /*
+         Withdraw
+     */
 
     function withdrawBalance() public onlyRole(ADMIN_ROLE) {
         address payable _owner = payable(_msgSender());
@@ -116,8 +199,8 @@ contract TankBattleToken is ERC20Snapshot, Pausable, AccessControl {
     }
 
     function withdrawTokens(address _tokenAddr, address _to)
-        public
-        onlyRole(ADMIN_ROLE)
+    public
+    onlyRole(ADMIN_ROLE)
     {
         require(
             _tokenAddr != address(this),
@@ -136,10 +219,5 @@ contract TankBattleToken is ERC20Snapshot, Pausable, AccessControl {
             size := extcodesize(account)
         }
         return size > 0;
-    }
-
-    modifier notBlackListed() {
-        require(!blackListedList[msg.sender], "Address is blacklisted");
-        _;
     }
 }
