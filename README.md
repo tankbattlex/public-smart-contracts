@@ -8,4 +8,4 @@ This contract holds data for the TankBattle's Token.
 
 Source code: TankToken.sol
 
-MainNet address: [0x6a96511c0Ce9A8D2e4D50e0ef3eB5cdB0E64c1A4](https://bscscan.com/token/0x6a96511c0Ce9A8D2e4D50e0ef3eB5cdB0E64c1A4)
+MainNet address: [0x59f6b2435cd1421f409907ad2d9f811849ca555f](https://bscscan.com/token/0x59f6b2435cd1421f409907ad2d9f811849ca555f)
