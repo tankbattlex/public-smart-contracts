@@ -10,27 +10,22 @@ import "./modules/GasPriceController.sol";
 import "./modules/DexListing.sol";
 import "./modules/TransferFee.sol";
 
-contract ERC20Token is ERC20, GasPriceController, DexListing, TransferFee, Pausable, AccessControl {
+contract TankToken is ERC20, GasPriceController, DexListing, TransferFee, Pausable, AccessControl {
 
     bytes32 private constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 private constant BURNER_ROLE = keccak256("BURNER_ROLE");
     bytes32 private constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     mapping(address => bool) private blackListedList;
-
-    constructor(
-        string memory name_,
-        string memory symbol_,
-        uint listingDuration_,
-        uint initSupply_
-    )
-    ERC20(name_, symbol_)
-    DexListing(listingDuration_)
+    uint256 private initialTokensSupply = 1000000000 * 10 ** decimals(); //1B
+    constructor()
+    ERC20("TankBattle Token", "TBL")
+    DexListing(100)
     {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setupRole(ADMIN_ROLE, msg.sender);
         _setupRole(BURNER_ROLE, msg.sender);
         _setupRole(PAUSER_ROLE, msg.sender);
-        _mint(msg.sender, initSupply_);
+        _mint(msg.sender, initialTokensSupply);
         _setTransferFee(msg.sender, 0, 0, 0);
     }
 
